@@ -5,7 +5,20 @@ var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
+var passport = require('passport');
+var session = require('express-session');
+var MongoStore = require('connect-mongo')(session);
 var User = require("./models/user");
+
+passport.serializeuser(function(user, done) {
+  done(null, user._id);
+});
+
+passport.deserializeUser(function(value, done) {
+  User.findById(value, function(err, user) {
+    done(err, user);
+  });
+});
 
 var routes = require('./routes/index');
 
@@ -29,6 +42,20 @@ var db = mongoose.connection;
 
 // mongo error
 db.on('error', console.error.bind(console, 'connection error:'));
+
+// Session config for passport and MongoDB
+app.use(session({
+  secret: "This is a secret",
+  resave: true,
+  saveUninitialized: true,
+  store: new MongoStore({ mongooseConnection: db })
+}));
+
+// Initialize passport
+app.use(passport.initialize());
+
+// Restore session
+app.use(passport.session());
 
 app.use('/', routes);
 
