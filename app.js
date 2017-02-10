@@ -6,21 +6,56 @@ var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
 var passport = require('passport');
+var GitHubStrategy = require('passport-github').Strategy;
+var FacebookStrategy = require('passport-facebook').Strategy;
 var session = require('express-session');
 var MongoStore = require('connect-mongo')(session);
 var User = require("./models/user");
 
-passport.serializeuser(function(user, done) {
+
+function generateOrFindUser(accessToken, refreshToken, profile, done) {
+
+    User.findOneAndUpdate({
+      email: profile.repos_url,
+    }, {
+      name: profile.displayName,
+      email: profile.repos_url,
+      photo: profile.photos[0].value
+    }, {
+      upsert: true
+    }, 
+    done);
+}
+
+// Configure GitHub strategy
+passport.use(new GitHubStrategy({
+  clientID: process.env.GITHUB_CLIENT_ID,
+  clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  callbackURL: "http://localhost:3000/auth/github/return"
+}, generateOrFindUser));
+
+// Configure Facebook strategy
+passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: "http://localhost:3000/auth/facebook/return",
+    profileFields: ['id', 'displayName', 'photos', 'email']
+}, generateOrFindUser));
+
+passport.serializeUser(function(user, done) {
+  console.log('serialize');
   done(null, user._id);
 });
 
 passport.deserializeUser(function(value, done) {
+  console.log('deserialize');
   User.findById(value, function(err, user) {
     done(err, user);
   });
 });
 
 var routes = require('./routes/index');
+var auth = require('./routes/auth');
 
 var app = express();
 
@@ -58,6 +93,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use('/', routes);
+app.use('/auth', auth);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
